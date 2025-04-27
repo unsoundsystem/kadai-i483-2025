@@ -1,0 +1,59 @@
+[1/9] Performing build step for 'bootloader'
+[1/1] cd /home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/build/bootloader/esp-idf/esptool_py && /home/unsoundsystem/.espressif/python_env/idf5.4_py3.13_env/bin/python /home/unsoundsystem/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/build/bootloader/bootloader.bin
+Bootloader binary size 0x6580 bytes. 0xa80 bytes (9%) free.
+[2/9] No install step for 'bootloader'
+[3/9] Completed 'bootloader'
+[4/9] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/main.c.obj
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c: In function 'setup_rpr':
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:26:22: warning: excess elements in scalar initializer
+   26 | #define RPR_MODE_VAL 0b10001010
+      |                      ^~~~~~~~~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:74:48: note: in expansion of macro 'RPR_MODE_VAL'
+   74 |         uint8_t write_buf = {RPR_MODE_CONTROL, RPR_MODE_VAL};
+      |                                                ^~~~~~~~~~~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:26:22: note: (near initialization for 'write_buf')
+   26 | #define RPR_MODE_VAL 0b10001010
+      |                      ^~~~~~~~~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:74:48: note: in expansion of macro 'RPR_MODE_VAL'
+   74 |         uint8_t write_buf = {RPR_MODE_CONTROL, RPR_MODE_VAL};
+      |                                                ^~~~~~~~~~~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:29:32: warning: excess elements in scalar initializer
+   29 | #define RPR_ALS_PS_CONTROL_VAL 0x2
+      |                                ^~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:78:51: note: in expansion of macro 'RPR_ALS_PS_CONTROL_VAL'
+   78 |         uint8_t write_buf2 = {RPR_ALS_PS_CONTROL, RPR_ALS_PS_CONTROL_VAL};
+      |                                                   ^~~~~~~~~~~~~~~~~~~~~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:29:32: note: (near initialization for 'write_buf2')
+   29 | #define RPR_ALS_PS_CONTROL_VAL 0x2
+      |                                ^~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:78:51: note: in expansion of macro 'RPR_ALS_PS_CONTROL_VAL'
+   78 |         uint8_t write_buf2 = {RPR_ALS_PS_CONTROL, RPR_ALS_PS_CONTROL_VAL};
+      |                                                   ^~~~~~~~~~~~~~~~~~~~~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c: In function 'app_main':
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:29:32: warning: excess elements in scalar initializer
+   29 | #define RPR_ALS_PS_CONTROL_VAL 0x2
+      |                                ^~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:91:52: note: in expansion of macro 'RPR_ALS_PS_CONTROL_VAL'
+   91 |           uint8_t write_buf = {RPR_ALS_PS_CONTROL, RPR_ALS_PS_CONTROL_VAL};
+      |                                                    ^~~~~~~~~~~~~~~~~~~~~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:29:32: note: (near initialization for 'write_buf')
+   29 | #define RPR_ALS_PS_CONTROL_VAL 0x2
+      |                                ^~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:91:52: note: in expansion of macro 'RPR_ALS_PS_CONTROL_VAL'
+   91 |           uint8_t write_buf = {RPR_ALS_PS_CONTROL, RPR_ALS_PS_CONTROL_VAL};
+      |                                                    ^~~~~~~~~~~~~~~~~~~~~~
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c: At top level:
+/home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/main/main.c:18:14: warning: 'TAG' defined but not used [-Wunused-variable]
+   18 | static char *TAG = "rpr0521rs measurement";
+      |              ^~~
+[5/9] Linking C static library esp-idf/main/libmain.a
+[6/9] Generating ld/sections.ld
+[7/9] Linking CXX executable rpr0521rs_esp_idf.elf
+[8/9] Generating binary image from built executable
+esptool.py v4.8.1
+Creating esp32 image...
+Merged 2 ELF sections
+Successfully created esp32 image.
+Generated /home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/build/rpr0521rs_esp_idf.bin
+[9/9] cd /home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/build/esp-idf/esptool_py && /home/unsoundsystem/.espressif/python_env/idf5.4_py3.13_env/bin/python /home/unsoundsystem/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/build/partition_table/partition-table.bin /home/unsoundsystem/projects/smart-embedded-system/kadai-i483-2025/rpr0521rs_esp_idf/build/rpr0521rs_esp_idf.bin
+rpr0521rs_esp_idf.bin binary size 0x30fc0 bytes. Smallest app partition is 0x100000 bytes. 0xcf040 bytes (81%) free.
