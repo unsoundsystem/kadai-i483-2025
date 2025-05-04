@@ -23,7 +23,8 @@ static char *TAG = "rpr0521rs measurement";
 #define I2C_ADDR_RPR0521RS 0x38
 
 #define RPR_MODE_CONTROL 0x41
-#define RPR_MODE_VAL 0b10001010
+// 0b10001010
+#define RPR_MODE_VAL 0x8a 
 #define RPR_SYSTEM_CONTROL 0x40
 #define RPR_ALS_PS_CONTROL 0x42
 #define RPR_ALS_PS_CONTROL_VAL 0x2
@@ -71,13 +72,23 @@ void setup_rpr() {
 		printf("part id not met\n");
 	}
 
-	uint8_t write_buf = {RPR_MODE_CONTROL, RPR_MODE_VAL};
-	res = i2c_master_transmit(rpr0521rs, &write_buf, sizeof(write_buf), 100);
+	uint8_t write_buf[2] = {0x40, 0x80};
+	res = i2c_master_transmit(rpr0521rs, write_buf, sizeof(write_buf), 100);
 	ESP_ERROR_CHECK(res);
 
-	uint8_t write_buf2 = {RPR_ALS_PS_CONTROL, RPR_ALS_PS_CONTROL_VAL};
-	res = i2c_master_transmit(rpr0521rs, &write_buf2, sizeof(write_buf2), 100);
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+
+	uint8_t write_buf1[2] = {RPR_MODE_CONTROL, RPR_MODE_VAL};
+	res = i2c_master_transmit(rpr0521rs, write_buf1, sizeof(write_buf1), 100);
 	ESP_ERROR_CHECK(res);
+
+	vTaskDelay(500 / portTICK_PERIOD_MS);
+
+	uint8_t write_buf2[2] = {RPR_ALS_PS_CONTROL, RPR_ALS_PS_CONTROL_VAL};
+	res = i2c_master_transmit(rpr0521rs, write_buf2, sizeof(write_buf2), 100);
+	ESP_ERROR_CHECK(res);
+
+	printf("setup rpr0521rs done!\n");
 }
 
 void app_main(void) {
@@ -89,17 +100,17 @@ void app_main(void) {
   while(1) {
 	  vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-	  uint8_t als0_lsb_read_buf = 0;
-	  uint8_t als0_msb_read_buf = 0;
-	  uint8_t als0_lsb_write_buf = RPR_ALS_DATA_0_LSBs;
-	  uint8_t als0_msb_write_buf = RPR_ALS_DATA_0_MSBs;
-	  res = i2c_master_transmit_receive(rpr0521rs, &als0_lsb_write_buf, sizeof(als0_lsb_write_buf),
-			  &als0_lsb_read_buf, sizeof(als0_lsb_read_buf), 100);
+	  uint8_t als0_lsb_read_buf[] = {0};
+	  uint8_t als0_msb_read_buf[] = {0};
+	  uint8_t als0_lsb_write_buf[1] = {RPR_ALS_DATA_0_LSBs};
+	  uint8_t als0_msb_write_buf[1] = {RPR_ALS_DATA_0_MSBs};
+	  res = i2c_master_transmit_receive(rpr0521rs, als0_lsb_write_buf, sizeof(als0_lsb_write_buf),
+			  als0_lsb_read_buf, sizeof(als0_lsb_read_buf), 100);
 	  ESP_ERROR_CHECK(res);
-	  res = i2c_master_transmit_receive(rpr0521rs, &als0_msb_write_buf, sizeof(als0_msb_write_buf),
-			  &als0_msb_read_buf, sizeof(als0_msb_read_buf), 100);
+	  res = i2c_master_transmit_receive(rpr0521rs, als0_msb_write_buf, sizeof(als0_msb_write_buf),
+			  als0_msb_read_buf, sizeof(als0_msb_read_buf), 100);
 	  ESP_ERROR_CHECK(res);
-	  /*uint16_t als0_data = ((uint16_t)als0_msb_read_buf << 8) | als0_lsb_read_buf;*/
-	  printf("rawlx: %u, %u\n", als0_msb_read_buf, als0_msb_read_buf);
+	  uint16_t als0_data = ((uint16_t)als0_msb_read_buf[0] << 8) | als0_lsb_read_buf[0];
+	  printf("rawlx: %u\n", als0_data);
   }
 }
