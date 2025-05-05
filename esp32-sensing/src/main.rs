@@ -28,11 +28,21 @@ fn main() -> Result<()> {
 
     bh1750::setup(&mut i2c);
     dps310::setup(&mut i2c);
+    let dps_coef = dps310::read_coefficients(&mut i2c)?;
 
     loop {
         FreeRtos::delay_ms(1000);
         let rawlx = bh1750::perform_measurement(&mut i2c)?;
         println!("rawlx(bh): {}, lux: {}", rawlx, bh1750::calc_lux(rawlx));
+
+
+        FreeRtos::delay_ms(500);
+        let rawtmp = dps310::read_temprature(&mut i2c)?;
+        println!("tmp: {}, rawtmp: {}", dps310::comp_temp_val(rawtmp), rawtmp);
+
+        FreeRtos::delay_ms(500);
+        let rawprs = dps310::read_pressure(&mut i2c)?;
+        println!("prs: {}, rawprs: {}", dps310::comp_prs_val(rawprs, rawtmp, &dps_coef), rawprs);
     }
     Ok(())
 }
