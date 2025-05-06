@@ -1,5 +1,7 @@
 mod bh1750;
 mod dps310;
+mod rpr0521rs;
+mod scd41;
 use anyhow::Result;
 use esp_idf_svc::{
   hal::{gpio::PinDriver, peripherals::Peripherals, delay::FreeRtos, i2c::{I2cConfig, I2cDriver}, units::*},
@@ -28,21 +30,29 @@ fn main() -> Result<()> {
 
     bh1750::setup(&mut i2c);
     dps310::setup(&mut i2c);
+    rpr0521rs::setup(&mut i2c);
     FreeRtos::delay_ms(500);
     let dps_coef = dps310::read_coefficients(&mut i2c)?;
 
     loop {
         FreeRtos::delay_ms(1000);
-        let rawlx = bh1750::perform_measurement(&mut i2c)?;
-        println!("rawlx(bh): {}, lux: {}", rawlx, bh1750::calc_lux(rawlx));
 
-        FreeRtos::delay_ms(1000);
+        // DPS310
         let rawtmp = dps310::read_temprature(&mut i2c)?;
         println!("tmp: {} °C, rawtmp: {}", dps310::comp_temp_val(rawtmp, &dps_coef), rawtmp);
-
         FreeRtos::delay_ms(500);
         let rawprs = dps310::read_pressure(&mut i2c)?;
-        println!("prs: {} hPa, rawprs: {}", dps310::comp_prs_val(rawprs, rawtmp, &dps_coef) / 100f32, rawprs);
+        println!("prs: {} hPa, rawprs: {}\n", dps310::comp_prs_val(rawprs, rawtmp, &dps_coef) / 100f32, rawprs);
+
+        // BH1750
+        FreeRtos::delay_ms(500);
+        let rawlx = bh1750::perform_measurement(&mut i2c)?;
+        println!("rawlx(bh): {}, lux: {}\n", rawlx, bh1750::calc_lux(rawlx));
+
+        // rpr0521rs
+        FreeRtos::delay_ms(500);
+        let rawlx2 = rpr0521rs::perform_measurement(&mut i2c)?;
+        println!("rawlx(rpr): {}, lux: {}\n", rawlx2, rawlx2);
     }
     Ok(())
 }

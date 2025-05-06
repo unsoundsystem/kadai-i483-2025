@@ -4,7 +4,7 @@ import struct
 
 SCD41_ADDR = 0x62
 
-bus = I2C(0, scl=Pin(21, pull=Pin.PULL_UP), sda=Pin(19, pull=Pin.PULL_UP), freq=400000, timeout=1000000)
+bus = I2C(0, scl=Pin(19, pull=Pin.PULL_UP), sda=Pin(21, pull=Pin.PULL_UP), freq=400000, timeout=1000000)
 
 def start_periodic_measurement():
     bus.writeto(SCD41_ADDR, b'\x21\xb1')
@@ -73,6 +73,11 @@ def crc_check(data):
            data, 3) == 0
 
 print("Hello, world!!")
+if SCD41_ADDR not in bus.scan():
+    print("SCD41 not found")
+    print("devs: ", bus.scan())
+    while True:
+        time.sleep(1)
 stop_periodic_measurement()
 time.sleep(0.5)
 start_periodic_measurement()

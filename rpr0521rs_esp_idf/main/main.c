@@ -17,8 +17,8 @@
 
 static char *TAG = "rpr0521rs measurement";
 
-#define I2C_MASTER_SCL_IO 21
-#define I2C_MASTER_SDA_IO 19
+#define I2C_MASTER_SCL_IO 19
+#define I2C_MASTER_SDA_IO 21
 
 #define I2C_ADDR_RPR0521RS 0x38
 
@@ -58,7 +58,7 @@ void setup_i2c(void) {
 									  }),
         &rpr0521rs);
   } else {
-    printf("failed to detect rpr0521rs!");
+    printf("failed to detect rpr0521rs!(error: %x)", result);
     esp_restart();
   }
 }
