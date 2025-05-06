@@ -28,6 +28,7 @@ fn main() -> Result<()> {
 
     bh1750::setup(&mut i2c);
     dps310::setup(&mut i2c);
+    FreeRtos::delay_ms(500);
     let dps_coef = dps310::read_coefficients(&mut i2c)?;
 
     loop {
@@ -35,14 +36,13 @@ fn main() -> Result<()> {
         let rawlx = bh1750::perform_measurement(&mut i2c)?;
         println!("rawlx(bh): {}, lux: {}", rawlx, bh1750::calc_lux(rawlx));
 
-
-        FreeRtos::delay_ms(500);
+        FreeRtos::delay_ms(1000);
         let rawtmp = dps310::read_temprature(&mut i2c)?;
-        println!("tmp: {}, rawtmp: {}", dps310::comp_temp_val(rawtmp), rawtmp);
+        println!("tmp: {} °C, rawtmp: {}", dps310::comp_temp_val(rawtmp, &dps_coef), rawtmp);
 
         FreeRtos::delay_ms(500);
         let rawprs = dps310::read_pressure(&mut i2c)?;
-        println!("prs: {}, rawprs: {}", dps310::comp_prs_val(rawprs, rawtmp, &dps_coef), rawprs);
+        println!("prs: {} hPa, rawprs: {}", dps310::comp_prs_val(rawprs, rawtmp, &dps_coef) / 100f32, rawprs);
     }
     Ok(())
 }

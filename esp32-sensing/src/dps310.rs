@@ -14,11 +14,18 @@ pub fn setup(bus: &mut I2cDriver) {
     // soft reset
     bus.write(DPS310_ADDR, &[Dps310Regs::Status as u8, 0b1001], BLOCK);
 
+    // coefficient source
+    bus.write(DPS310_ADDR, &[0x28, 0], BLOCK);
+
     println!("dps310 status: {:x?}", get_status(bus));
     println!("-- COEFFICIENTS --\n{:#?}", read_coefficients(bus));
 
-    // interrupt & FIFO config
-    bus.write(DPS310_ADDR, &[0x9, 0xc], BLOCK);
+    // interrupt & FIFO config for oversampling
+    bus.write(DPS310_ADDR, &[0x9, 0b1100], BLOCK);
+
+    while !get_status(bus).unwrap().sens_ready {
+        FreeRtos::delay_ms(1);
+    }
 }
 
 pub fn get_status(bus: &mut I2cDriver) -> Result<Dps310Status> {
@@ -103,11 +110,12 @@ pub fn read_coefficients(bus: &mut I2cDriver) -> Result<Dps310Coefficients> {
     bus.write_read(DPS310_ADDR, &[0x20], &mut c30_15_8, BLOCK);
     bus.write_read(DPS310_ADDR, &[0x21], &mut c30_7_0, BLOCK);
 
+    //println!("c1: {:b} {:b}", c0_3_0__c1_11_8[0] & 0xf, c1_7_0[0]);
     Ok(Dps310Coefficients {
-        c0: sign_ext_12bit(((c0_11_4[0] as u16) << 4) | ((c0_3_0__c1_11_8[0] as u16) >> 4)),
+        c0: sign_ext_12bit(((c0_11_4[0] as u16) << 4) | (((c0_3_0__c1_11_8[0] as u16) >> 4) & 0xf)),
         c1: sign_ext_12bit((((c0_3_0__c1_11_8[0] & 0xf) as u16) << 8) | c1_7_0[0] as u16),
         c00: sign_ext_20bit(((c00_19_12[0] as u32) << 12) | ((c00_11_4[0] as u32) << 4) |
-            ((c00_3_0__c10_19_16[0] as u32) >> 4)),
+            (((c00_3_0__c10_19_16[0] as u32) >> 4) & 0xf)),
         c10: sign_ext_20bit((((c00_3_0__c10_19_16[0] & 0xf) as u32) << 16) | ((c10_15_8[0] as u32) << 8)
             | (c10_7_0[0] as u32)),
         c01: (((c01_15_8[0] as u16) << 8) | (c01_7_0[0] as u16)) as i16,
@@ -119,13 +127,13 @@ pub fn read_coefficients(bus: &mut I2cDriver) -> Result<Dps310Coefficients> {
 }
 
 pub fn read_pressure(bus: &mut I2cDriver) -> Result<i32> {
-    // oversampling (rate is 128 times)
-    bus.write(DPS310_ADDR, &[0x6, 0xd], BLOCK)?;
+    // oversampling (rate is 64 times)
+    bus.write(DPS310_ADDR, &[0x6, 0x6], BLOCK)?;
     bus.write(DPS310_ADDR, &[Dps310Regs::Status as u8, 0b001], BLOCK)?;
 
     let mut x = [0u8;1];
     bus.write_read(DPS310_ADDR, &[0x6], &mut x, BLOCK)?;
-    println!("PRS_CFG: {:b}", x[0]);
+    //println!("PRS_CFG: {:b}", x[0]);
 
 
     while !get_status(bus)?.prs_ready {
@@ -140,19 +148,19 @@ pub fn read_pressure(bus: &mut I2cDriver) -> Result<i32> {
     bus.write_read(DPS310_ADDR, &[0x1], &mut prs_b1, BLOCK);
     bus.write_read(DPS310_ADDR, &[0x2], &mut prs_b0, BLOCK);
 
-    Ok((((prs_b2[0] as u32) << 16)
+    Ok(sign_ext_24bit(((prs_b2[0] as u32) << 16)
             | ((prs_b1[0] as u32) << 8)
-            | (prs_b0[0] as u32)) as i32)
+            | (prs_b0[0] as u32)))
 }
 
 pub fn read_temprature(bus: &mut I2cDriver) -> Result<i32> {
-    // oversampling (rate is 128 times)
-    bus.write(DPS310_ADDR, &[0x7, 0xd], BLOCK)?;
+    // oversampling (rate is 64 times)
+    bus.write(DPS310_ADDR, &[0x7, 0x6], BLOCK)?;
     bus.write(DPS310_ADDR, &[Dps310Regs::Status as u8, 0b010], BLOCK)?;
 
     let mut x = [0u8;1];
     bus.write_read(DPS310_ADDR, &[0x7], &mut x, BLOCK)?;
-    println!("TMP_CFG: {:b}", x[0]);
+    //println!("TMP_CFG: {:b}", x[0]);
 
     while !get_status(bus)?.temp_ready {
         FreeRtos::delay_ms(1);
@@ -166,14 +174,17 @@ pub fn read_temprature(bus: &mut I2cDriver) -> Result<i32> {
     bus.write_read(DPS310_ADDR, &[0x4], &mut tmp_b1, BLOCK);
     bus.write_read(DPS310_ADDR, &[0x5], &mut tmp_b0, BLOCK);
 
-    Ok((((tmp_b2[0] as u32) << 16)
+    //println!("raw tmp: {:b}", ((tmp_b2[0] as u32) << 16)
+            //| ((tmp_b1[0] as u32) << 8)
+            //| (tmp_b0[0] as u32));
+    Ok(sign_ext_24bit(((tmp_b2[0] as u32) << 16)
             | ((tmp_b1[0] as u32) << 8)
-            | (tmp_b0[0] as u32)) as i32)
+            | (tmp_b0[0] as u32)))
 }
 
 #[inline]
 fn sign_ext_12bit(x: u16) -> i16 {
-    if x & (1 << 11) != 0 {
+    if x & (1u16 << 11) != 0 {
         (x | (u16::MAX << 11)) as i16
     } else {
         x as i16
@@ -182,7 +193,7 @@ fn sign_ext_12bit(x: u16) -> i16 {
 
 #[inline]
 fn sign_ext_20bit(x: u32) -> i32 {
-    if x & (1 << 19) != 0 {
+    if x & (1u32 << 19) != 0 {
         (x | (u32::MAX << 19)) as i32
     } else {
         x as i32
@@ -191,23 +202,35 @@ fn sign_ext_20bit(x: u32) -> i32 {
 
 #[inline]
 fn sign_ext_24bit(x: u32) -> i32 {
-    if x & (1 << 23) != 0 {
+    if x & (1u32 << 23) != 0 {
         (x | (u32::MAX << 23)) as i32
     } else {
         x as i32
     }
 }
 
-pub fn comp_temp_val(x: i32) -> f64 {
-    x as f64 / 2088960f64
+const COMP_SCALE_128: f32 = 2088960.0_f32;
+const COMP_SCALE_64: f32 = 1040384.0_f32;
+const COMP_SCALE_1: f32 = 524288.0_f32;
+
+pub fn comp_temp_val(x: i32, coef: &Dps310Coefficients) -> f32 {
+    (coef.c0 as f32 / 2f32) + (scale_temp_val(x) * coef.c1 as f32)
 }
 
-pub fn comp_prs_val(rawprs: i32, rawtemp: i32, coef: &Dps310Coefficients) -> f64 {
-    let p_raw_sc = rawprs as f64 / 2088960f64;
-    let t_raw_sc = comp_temp_val(rawprs);
+pub fn scale_temp_val(x: i32) -> f32 {
+    x as f32 / COMP_SCALE_64
+}
+
+pub fn comp_prs_val(rawprs: i32, rawtemp: i32, coef: &Dps310Coefficients) -> f32 {
+    let p_raw_sc = rawprs as f32 / COMP_SCALE_64;
+    let t_raw_sc = scale_temp_val(rawtemp);
 
     // c00 + Praw_sc*(c10 + Praw_sc *(c20+ Praw_sc *c30)) + Traw_sc *c01 +
     // Traw_sc *Praw_sc *(c11+Praw_sc*c21)
-    coef.c00 as f64 + p_raw_sc as f64 * (coef.c10 as f64 + p_raw_sc as f64 * (coef.c20 as f64 + p_raw_sc as f64 * coef.c30 as f64))
-        + t_raw_sc as f64 * coef.c01 as f64 + t_raw_sc as f64 * p_raw_sc as f64 * (coef.c11 as f64 + p_raw_sc as f64 * coef.c21 as f64)
+    coef.c00 as f32
+        + p_raw_sc as f32
+            * (coef.c10 as f32 + p_raw_sc as f32 * (coef.c20 as f32 + p_raw_sc as f32 * coef.c30 as f32))
+        + t_raw_sc as f32 * coef.c01 as f32
+        + t_raw_sc as f32 * p_raw_sc as f32
+            * (coef.c11 as f32 + p_raw_sc as f32 * coef.c21 as f32)
 }
