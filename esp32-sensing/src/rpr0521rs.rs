@@ -1,3 +1,4 @@
+use byteorder::{ByteOrder, LittleEndian};
 use anyhow::Result;
 use esp_idf_svc::{
   hal::{gpio::PinDriver, peripherals::Peripherals, delay::{FreeRtos, BLOCK}, i2c::I2cDriver},
@@ -11,6 +12,8 @@ enum RprRegs {
     AlsPsControl = 0x42,
     Als0Lsb = 0x46,
     Als0Msb = 0x47,
+    Als1Lsb = 0x48,
+    Als1Msb = 0x49,
 }
 
 pub fn setup(bus: &mut I2cDriver) {
@@ -22,11 +25,17 @@ pub fn setup(bus: &mut I2cDriver) {
     bus.write(RPR_ADDR, &[RprRegs::AlsPsControl as u8, 0x2], BLOCK);
 }
 
-pub fn perform_measurement(bus: &mut I2cDriver) -> Result<u16> {
+pub fn perform_measurement(bus: &mut I2cDriver) -> Result<(u16, u16)> {
+    let mut res = [0u8; 4];
     let mut als0_lsb_buf = [0u8; 1];
     let mut als0_msb_buf = [0u8; 1];
-    bus.write_read(RPR_ADDR, &[RprRegs::Als0Lsb as u8], &mut als0_lsb_buf, BLOCK)?;
-    bus.write_read(RPR_ADDR, &[RprRegs::Als0Msb as u8], &mut als0_msb_buf, BLOCK)?;
+    bus.write_read(RPR_ADDR, &[RprRegs::Als0Lsb as u8], &mut res, BLOCK)?;
+    //bus.write_read(RPR_ADDR, &[RprRegs::Als0Lsb as u8], &mut als0_lsb_buf, BLOCK)?;
+    //bus.write_read(RPR_ADDR, &[RprRegs::Als0Msb as u8], &mut als0_msb_buf, BLOCK)?;
 
-    Ok(((als0_msb_buf[0] as u16) << 8) | als0_lsb_buf[0] as u16)
+    //Ok(((als0_msb_buf[0] as u16) << 8) | als0_lsb_buf[0] as u16)
+
+    let als0_data = LittleEndian::read_u16(&res[0..2]);
+    let als1_data = LittleEndian::read_u16(&res[2..4]);
+    Ok((als0_data, als1_data))
 }

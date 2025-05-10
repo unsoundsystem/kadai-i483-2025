@@ -8,6 +8,8 @@ const DPS310_ADDR: u8 = 0x77;
 enum Dps310Regs {
     Status = 0x8,
     Reset = 0xc,
+    PrsCfg = 0x6,
+    TmpCfg = 0x7,
 }
 
 pub fn setup(bus: &mut I2cDriver) {
@@ -26,6 +28,17 @@ pub fn setup(bus: &mut I2cDriver) {
     while !get_status(bus).unwrap().sens_ready {
         FreeRtos::delay_ms(1);
     }
+
+    // calibration source (set to use external temperature sensor)
+    // NOTE: internal temperature sensor doesn't work well
+    bus.write(DPS310_ADDR, &[0x28, 1u8 << 7], BLOCK);
+
+    // pressure oversampling (rate is 64 times)
+    bus.write(DPS310_ADDR, &[0x6, 0b0110], BLOCK);
+
+    // temperature oversampling (rate is 64 times)
+    // And set to use external temperature sensor
+    bus.write(DPS310_ADDR, &[0x7, 0b0110 | (1u8 << 7)], BLOCK);
 }
 
 pub fn get_status(bus: &mut I2cDriver) -> Result<Dps310Status> {
@@ -112,11 +125,15 @@ pub fn read_coefficients(bus: &mut I2cDriver) -> Result<Dps310Coefficients> {
 
     //println!("c1: {:b} {:b}", c0_3_0__c1_11_8[0] & 0xf, c1_7_0[0]);
     Ok(Dps310Coefficients {
-        c0: sign_ext_12bit(((c0_11_4[0] as u16) << 4) | (((c0_3_0__c1_11_8[0] as u16) >> 4) & 0xf)),
-        c1: sign_ext_12bit((((c0_3_0__c1_11_8[0] & 0xf) as u16) << 8) | c1_7_0[0] as u16),
-        c00: sign_ext_20bit(((c00_19_12[0] as u32) << 12) | ((c00_11_4[0] as u32) << 4) |
-            (((c00_3_0__c10_19_16[0] as u32) >> 4) & 0xf)),
-        c10: sign_ext_20bit((((c00_3_0__c10_19_16[0] & 0xf) as u32) << 16) | ((c10_15_8[0] as u32) << 8)
+        c0: sign_ext_12bit(((c0_11_4[0] as u16) << 4)
+                | ((((c0_3_0__c1_11_8[0] & 0xf0) as u16) >> 4) & 0xf)),
+        c1: sign_ext_12bit((((c0_3_0__c1_11_8[0] & 0x0f) as u16) << 8)
+                | c1_7_0[0] as u16),
+        c00: sign_ext_20bit(((c00_19_12[0] as u32) << 12)
+                | ((c00_11_4[0] as u32) << 4)
+                | (((c00_3_0__c10_19_16[0] as u32) >> 4) & 0xf)),
+        c10: sign_ext_20bit((((c00_3_0__c10_19_16[0] & 0xf) as u32) << 16)
+            | ((c10_15_8[0] as u32) << 8)
             | (c10_7_0[0] as u32)),
         c01: (((c01_15_8[0] as u16) << 8) | (c01_7_0[0] as u16)) as i16,
         c11: (((c11_15_8[0] as u16) << 8) | (c11_7_0[0] as u16)) as i16,
@@ -127,8 +144,6 @@ pub fn read_coefficients(bus: &mut I2cDriver) -> Result<Dps310Coefficients> {
 }
 
 pub fn read_pressure(bus: &mut I2cDriver) -> Result<i32> {
-    // oversampling (rate is 64 times)
-    bus.write(DPS310_ADDR, &[0x6, 0x6], BLOCK)?;
     bus.write(DPS310_ADDR, &[Dps310Regs::Status as u8, 0b001], BLOCK)?;
 
     let mut x = [0u8;1];
@@ -154,8 +169,6 @@ pub fn read_pressure(bus: &mut I2cDriver) -> Result<i32> {
 }
 
 pub fn read_temprature(bus: &mut I2cDriver) -> Result<i32> {
-    // oversampling (rate is 64 times)
-    bus.write(DPS310_ADDR, &[0x7, 0x6], BLOCK)?;
     bus.write(DPS310_ADDR, &[Dps310Regs::Status as u8, 0b010], BLOCK)?;
 
     let mut x = [0u8;1];
@@ -174,9 +187,10 @@ pub fn read_temprature(bus: &mut I2cDriver) -> Result<i32> {
     bus.write_read(DPS310_ADDR, &[0x4], &mut tmp_b1, BLOCK);
     bus.write_read(DPS310_ADDR, &[0x5], &mut tmp_b0, BLOCK);
 
-    //println!("raw tmp: {:b}", ((tmp_b2[0] as u32) << 16)
-            //| ((tmp_b1[0] as u32) << 8)
-            //| (tmp_b0[0] as u32));
+    let tmp = ((tmp_b2[0] as u32) << 16)
+            | ((tmp_b1[0] as u32) << 8)
+            | (tmp_b0[0] as u32);
+    println!("raw tmp: {:b}, sign extended: {:b}", tmp, sign_ext_24bit(tmp));
     Ok(sign_ext_24bit(((tmp_b2[0] as u32) << 16)
             | ((tmp_b1[0] as u32) << 8)
             | (tmp_b0[0] as u32)))
