@@ -16,7 +16,7 @@ def is_data_ready():
     bus.writeto(SCD41_ADDR, b'\xe4\xb8', False)
     res = bus.readfrom(SCD41_ADDR, 3)
     word = struct.unpack(">H", res)
-    print(f'data status: {word[0]:x}')
+    # print(f'data status: {word[0]:x}')
     return ((word[0] & 0b11111111111) != 0)
 
 def read_measurement():
@@ -84,6 +84,7 @@ start_periodic_measurement()
 time.sleep(0.5)
 while True:
     time.sleep(1)
-    if is_data_ready():
-        print("DATA IS READY")
-        print(read_measurement())
+    while not is_data_ready():
+        time.sleep(0.1)
+    res = read_measurement()
+    print(f"{res['co2']} ppm, {res['temp']} °C, {res['humidity']} RH")

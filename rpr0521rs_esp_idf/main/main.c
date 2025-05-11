@@ -27,7 +27,7 @@ static char *TAG = "rpr0521rs measurement";
 #define RPR_MODE_VAL 0x8a 
 #define RPR_SYSTEM_CONTROL 0x40
 #define RPR_ALS_PS_CONTROL 0x42
-#define RPR_ALS_PS_CONTROL_VAL 0x2
+#define RPR_ALS_PS_CONTROL_VAL 0x2b
 #define RPR_ALS_DATA_0_LSBs 0x46
 #define RPR_ALS_DATA_0_MSBs 0x47
 #define RPR_ALS_DATA_1_LSBs 0x48
@@ -111,6 +111,23 @@ void app_main(void) {
 			  als0_msb_read_buf, sizeof(als0_msb_read_buf), 100);
 	  ESP_ERROR_CHECK(res);
 	  uint16_t als0_data = ((uint16_t)als0_msb_read_buf[0] << 8) | als0_lsb_read_buf[0];
-	  printf("rawlx: %u\n", als0_data);
+
+	  uint8_t als1_lsb_read_buf[] = {0};
+	  uint8_t als1_msb_read_buf[] = {0};
+	  uint8_t als1_lsb_write_buf[1] = {RPR_ALS_DATA_1_LSBs};
+	  uint8_t als1_msb_write_buf[1] = {RPR_ALS_DATA_1_MSBs};
+	  res = i2c_master_transmit_receive(rpr0521rs, als1_lsb_write_buf, sizeof(als1_lsb_write_buf),
+			  als1_lsb_read_buf, sizeof(als1_lsb_read_buf), 100);
+	  ESP_ERROR_CHECK(res);
+	  res = i2c_master_transmit_receive(rpr0521rs, als1_msb_write_buf, sizeof(als1_msb_write_buf),
+			  als1_msb_read_buf, sizeof(als1_msb_read_buf), 100);
+	  ESP_ERROR_CHECK(res);
+	  uint16_t als1_data = ((uint16_t)als1_msb_read_buf[0] << 8) | als1_lsb_read_buf[0];
+
+	  printf("%f lx (infrated: %f)\n",
+			  (double)als0_data * ((double)100 / (double)400) / (double)64,
+			  (double)als1_data * ((double)100 / (double)400) / (double)64
+			);
   }
+
 }

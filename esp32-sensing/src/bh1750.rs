@@ -33,5 +33,8 @@ pub fn perform_measurement(bus: &mut I2cDriver) -> Result<u16> {
 }
 
 pub fn calc_lux(data: u16) -> f64 {
-    (data as f64) / 1.2 * (69f64 / BH1750_MTREG as f64) / 2f64
+    (data as f64)
+        * (69f64 / BH1750_MTREG as f64)
+        / 2.0 // mode res2
+        / 1.2 // factor
 }

@@ -19,8 +19,8 @@ pub fn setup(bus: &mut I2cDriver) {
     // coefficient source
     bus.write(DPS310_ADDR, &[0x28, 0], BLOCK);
 
-    println!("dps310 status: {:x?}", get_status(bus));
-    println!("-- COEFFICIENTS --\n{:#?}", read_coefficients(bus));
+    //println!("dps310 status: {:x?}", get_status(bus));
+    //println!("-- COEFFICIENTS --\n{:#?}", read_coefficients(bus));
 
     // interrupt & FIFO config for oversampling
     bus.write(DPS310_ADDR, &[0x9, 0b1100], BLOCK);
@@ -190,7 +190,7 @@ pub fn read_temprature(bus: &mut I2cDriver) -> Result<i32> {
     let tmp = ((tmp_b2[0] as u32) << 16)
             | ((tmp_b1[0] as u32) << 8)
             | (tmp_b0[0] as u32);
-    println!("raw tmp: {:b}, sign extended: {:b}", tmp, sign_ext_24bit(tmp));
+    //println!("raw tmp: {:b}, sign extended: {:b}", tmp, sign_ext_24bit(tmp));
     Ok(sign_ext_24bit(((tmp_b2[0] as u32) << 16)
             | ((tmp_b1[0] as u32) << 8)
             | (tmp_b0[0] as u32)))
