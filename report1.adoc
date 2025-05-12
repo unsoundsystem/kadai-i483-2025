@@ -134,19 +134,51 @@
 
 == 課題2
 
+=== 実装
+
+実装を行い，以下に述べるセンサ設定で計測を行った．
+
+* 実装: `{repository_root}/esp32-sensing`
 * 使用言語: Rust
-    ** HALはesp-idf-svcを用いた
-* RPR0521RSの設定
-    ** LED current: 200mA
-    ** Gain x64
-* BH1750の設定
-    ** One Time H-Resolution Mode2
-    ** MTReg: 0xfe
-        *** one count = 0.11 lx
-* DPS310の設定
-    ** coefficient source: external temperature sensor
-    ** oversampling 64 times
-* SCD41の設定: デフォルト
+* 利用したcrate
+    ** esp-idf-svc: esp-idfのラッパー/HAL
+        *** https://docs.esp-rs.org/esp-idf-svc/esp_idf_svc/index.html
+    ** byteorder: エンディアンの変換
+        *** https://docs.rs/byteorder/latest/byteorder/
+    ** anyhow: エラー処理，Result型の統一的な扱い
+        *** https://docs.rs/anyhow/latest/anyhow/
+
+==== RPR0521RSの設定
+
+* LED current: 200mA
+* Gain x64
+
+補完式がデータシートに提供されいなかったため，RohmのArduinoライブラリを参考にした
+    https://github.com/RohmSemiconductor/Arduino/blob/447c576a4ff34215adaf2ae0e5ea68fbc4d73b8f/RPR-0521RS/RPR-0521RS.cpp#L182
+
+==== BH1750の設定
+
+* One Time H-Resolution Mode2
+* MTReg: 0xfe
+    ** one count = 0.11 lx
+
+==== DPS310の設定
+
+* coefficient source: external temperature sensor
+* oversampling 64 times
+
+デフォルトではASIC内部のセンサを用いるようになっていたが，値がおかしい(`-N °Ｃ` など)ので外部の温度センサを用いるように設定した
+
+==== SCD41の設定
+
+* デフォルト
+
+=== 計測
+
+* 計測方法
+    ** `print_csv()` (`esp32-sensing/main.rs` 内)
+    ** シリアルモニタで保存したログからCSVを作った
+    `cargo b && espflash flash ./target/xtensa-esp32-espidf/debug/esp32-sensing && picocom --baud 115200 /dev/ttyUSB0 -g output.txt`
 * データ: `{repository_root}/data/data.csv`
 * 横軸: 計測回数
 
