@@ -6,7 +6,7 @@ end
 data=CSV.read(ARGS[1], DataFrame)
 
 x = 0:size(data)[1]-1
-lx_plt = plot(x, [data.BH1750_lx data.RPR0521RS_lx data.RPR0521RS_inf], label=["BH1750 lx" "RPR0521RS lx" "RPR0521RS infrated"],  legend=:right)
+lx_plt = plot(x, [data.BH1750_lx data.RPR0521RS_lx data.RPR0521RS_inf], label=["BH1750 lx" "RPR0521RS lx" "RPR0521RS infrated"],  legend=:topleft)
 humidity_plt = plot(x, data.SCD41_humidity, label="SCD41 humidity (RH)")
 co2_plt = plot(x, data.SCD41_co2, label="SCD41 CO2 (ppm)")
 tmp_plot = plot(x, [data.DPS310_temp data.SCD41_temp], label=["DPS310 temp" "SCD41 temp"])
