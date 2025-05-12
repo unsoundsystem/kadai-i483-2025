@@ -135,17 +135,17 @@
 == 課題2
 
 * 使用言語: Rust
-    * HALはesp-idf-svcを用いた
+    ** HALはesp-idf-svcを用いた
 * RPR0521RSの設定
-    * LED current: 200mA
-    * Gain x64
+    ** LED current: 200mA
+    ** Gain x64
 * BH1750の設定
-    * One Time H-Resolution Mode2
-    * MTReg: 0xfe
-        * one count = 0.11 lx
+    ** One Time H-Resolution Mode2
+    ** MTReg: 0xfe
+        *** one count = 0.11 lx
 * DPS310の設定
-    * coefficient source: external temperature sensor
-    * oversampling 64 times
+    ** coefficient source: external temperature sensor
+    ** oversampling 64 times
 * SCD41の設定: デフォルト
 * データ: `{repository_root}/data/data.csv`
 * 横軸: 計測回数
