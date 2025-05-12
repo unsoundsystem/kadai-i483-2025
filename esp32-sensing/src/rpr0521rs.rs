@@ -16,13 +16,17 @@ enum RprRegs {
     Als1Msb = 0x49,
 }
 
+const ALS_GAIN_x1: u8 = 0b00_00_00_00;
+const ALS_GAIN_x64: u8 = 0b00_10_10_00;
+const ALS_LED_CURRENT_200: u8 = 0b00_00_00_11;
+
 pub fn setup(bus: &mut I2cDriver) {
     // soft reset
     bus.write(RPR_ADDR, &[RprRegs::SystemControl as u8, 0x80], BLOCK);
     // Mode setting: ALS ON, 400ms
     bus.write(RPR_ADDR, &[RprRegs::ModeControl as u8, 0x8a], BLOCK);
-    // ALS setting: All gain set to x64, 200mA LED current
-    bus.write(RPR_ADDR, &[RprRegs::AlsPsControl as u8, 0b00_10_10_11], BLOCK);
+    // ALS setting: All gain set to x1, 200mA LED current
+    bus.write(RPR_ADDR, &[RprRegs::AlsPsControl as u8, ALS_GAIN_x1 | ALS_LED_CURRENT_200], BLOCK);
     // ALS setting: All gain set to x128, 200mA LED current
     //bus.write(RPR_ADDR, &[RprRegs::AlsPsControl as u8, 0b00_10_11_11], BLOCK);
 }
@@ -40,9 +44,19 @@ pub fn perform_measurement(bus: &mut I2cDriver) -> Result<(f64, f64)> {
     let als0_data = LittleEndian::read_u16(&res[0..2]);
     let als1_data = LittleEndian::read_u16(&res[2..4]);
 
+    let mut ctr_res = [0u8; 1];
+    bus.write_read(RPR_ADDR, &[RprRegs::AlsPsControl as u8], &mut ctr_res, BLOCK)?;
+    let mut als0_lx: f64 = 0.0;
+    let mut als1_lx: f64 = 0.0;
+
     // data * (100 / measurement time) / gain
-    let als0_lx = (als0_data as f64) * (100.0 / 400.0) / 64.0;
-    let als1_lx = (als1_data as f64) * (100.0 / 400.0) / 64.0;
+    if ctr_res[0] & ALS_GAIN_x1 == ALS_GAIN_x1 {
+        als0_lx = (als0_data as f64) * (100.0 / 400.0);
+        als1_lx = (als1_data as f64) * (100.0 / 400.0);
+    } else if ctr_res[0] & ALS_GAIN_x64 == ALS_GAIN_x64 {
+        als0_lx = (als0_data as f64) * (100.0 / 400.0) / 64.0;
+        als1_lx = (als1_data as f64) * (100.0 / 400.0) / 64.0;
+    }
 
     //let mut lx = als0_lx;
     //let d1_d0 = als1_lx / als0_lx;
