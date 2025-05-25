@@ -27,6 +27,8 @@ log = "0.4"
 esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync"] }
 anyhow = "1.0.98"
 byteorder = "1.5.0"
+thingbuf = "0.1.6"
+heapless = "0.8.0"
 
 [build-dependencies]
 embuild = "0.33"

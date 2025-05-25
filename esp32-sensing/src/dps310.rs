@@ -68,7 +68,7 @@ impl Dps310Status {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Dps310Coefficients {
     c0: i16, // 12bit
     c1: i16, // 12bit
