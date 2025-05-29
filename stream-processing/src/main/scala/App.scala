@@ -18,6 +18,8 @@ import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
 import org.apache.spark.streaming.kafka010.ConsumerStrategies.Subscribe
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.core.config.Configurator
+import org.apache.spark.streaming.State
+import org.apache.spark.streaming.StateSpec
 
 object App {
   def main(args: Array[String]): Unit = {
@@ -58,7 +60,7 @@ object App {
 //        .format("kafka")
 //        .option("kafka.bootstrap.servers", "150.65.230.59:9092")
 //        .option("checkpointLocation", "/tmp/i483-spark-checkpoints")
-//        .option("topic", "i483-sensors-s2510150-analytics-s2510030_BH1750_avg-illumination")
+//        .option("topic", "i483-sensors--analytics-s2510030_BH1750_avg-illumination")
 //        //.option("truncate", "false")
 //        .start()
 //      val query_debug = df_out.writeStream
@@ -98,7 +100,7 @@ object App {
 //        //.format("kafka")
 //        //.option("kafka.bootstrap.servers", "150.65.230.59:9092")
 //        //.option("checkpointLocation", "/tmp/i483-spark-checkpoints")
-//        //.option("topic", "i483-sensors-s2510150-co2_threshold-crossed")
+//        //.option("topic", "i483-sensors--co2_threshold-crossed")
 //        .start()
 //
 //      query.awaitTermination()
@@ -164,6 +166,44 @@ object App {
         producer.close()
       }
     }
+
+
+    val co2_stream = KafkaUtils.createDirectStream[String, String](
+      ssc,
+      PreferConsistent,
+      Subscribe[String, String](Array("i483-sensors-s2510030-SCD41-co2"), kafkaParams)
+    )
+    val sf = StateSpec.function { (key: String, value: Option[Int], state: State[Option[Int]]) =>
+          val prevOpt = state.getOption
+          val current = value.get
+          val is_crossed = prevOpt match {
+            case Some(prev) =>
+              if (prev.get <= 700 && current > 700) Some("yes")
+              else if (prev.get > 700 && current <= 700) Some("no") else None
+            case None => if (current > 700) Some("yes") else Some("no")
+          }
+          state.update(Some(current))
+          is_crossed
+        }
+    val co2_threshold_yes_no = co2_stream
+      .map(r => ("keeeeeeeeeeeeey", r.value().toInt))
+      .mapWithState(sf)
+      .flatMap(_.toList)
+
+
+    co2_threshold_yes_no.foreachRDD { rdd =>
+      rdd.foreachPartition { partitionOfRecords =>
+        val producer = new KafkaProducer[String, String](props)
+        partitionOfRecords.foreach { record =>
+          val value = record.toString
+          val message = new ProducerRecord[String, String]("i483-sensors-s2510030-co2_threshold-crossed", value)
+          producer.send(message)
+        }
+        producer.close()
+      }
+    }
+
+
     //val sum = stream //.map(record => s"Kafka Data: $record")
       //.map(r => (r.timestamp(), r.value()))
       //.window(Minutes(5), Seconds(30))
