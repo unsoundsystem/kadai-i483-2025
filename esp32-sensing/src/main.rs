@@ -13,10 +13,10 @@ use esp_idf_svc::{
 };
 use wifi::wifi;
 use crate::dps310::Dps310Coefficients;
-use std::sync::{Mutex, Arc, mpsc::sync_channel};
+use std::sync::{Mutex, Arc, mpsc::channel};
 
 // 15000 - (sensor interaction overhead) 
-const DATA_COLLECTION_INTERVAL_MS: u32 = 14000;
+const DATA_COLLECTION_INTERVAL_MS: u32 = 15000;
 const MQTT_TOPIC_PREFIX: &'static str = "i483/sensors/s2510030";
 
 #[derive(Debug)]
@@ -47,8 +47,9 @@ fn main() -> Result<()> {
 
     log::info!("Starting I2C");
 
-    let config = I2cConfig::new().baudrate(KiloHertz(400).into());
-    let (sender, receiver) = sync_channel::<SensorData>(8);
+    // speed down
+    let config = I2cConfig::new().baudrate(KiloHertz(100).into());
+    let (sender, receiver) = channel::<SensorData>();
     let mut i2c = I2cDriver::new(i2c, sda, scl, &config)?;
 
     // WiFi setup
@@ -66,101 +67,129 @@ fn main() -> Result<()> {
     let mut mqtt_client = EspMqttClient::new(broker_url, &mqtt_config).unwrap();
 
 
+    log::info!("Setting up sensors");
     bh1750::setup(&mut i2c);
+    FreeRtos::delay_ms(500);
     dps310::setup(&mut i2c);
+    FreeRtos::delay_ms(500);
     rpr0521rs::setup(&mut i2c);
+    FreeRtos::delay_ms(500);
     scd41::setup(&mut i2c);
     FreeRtos::delay_ms(500);
     let dps_coef = dps310::read_coefficients(&mut i2c).unwrap();
+    log::info!("Sensor setup done");
+    log::info!("Waiting for sensors to generate first measurement...");
+    FreeRtos::delay_ms(5000);
 
+    //print_csv(&mut i2c, &dps_coef);
     let i2c_handle = Arc::new(Mutex::new(i2c));
 
     let builder = std::thread::Builder::new().stack_size(4096);
-    //print_csv(&mut i2c, &dps_coef);
-    //loop {
-        FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
 
-        let i2c = Arc::clone(&i2c_handle);
-        let tx = sender.clone();
-        let h = builder.spawn(move || {
-            let i2c = Arc::clone(&i2c);
-            loop {
-                FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
-                let mut i2c = i2c.lock().unwrap();
-                // DPS310
-                let rawtmp = dps310::read_temprature(&mut i2c).unwrap();
-                //println!("[DPS310] tmp: {:.2} °C, rawtmp: {}", dps310::comp_temp_val(rawtmp, &dps_coef), rawtmp);
-                //println!("[DPS310] tmp: {:.2} °C", dps310::comp_temp_val(rawtmp, &dps_coef));
-                FreeRtos::delay_ms(100);
-                let rawprs = dps310::read_pressure(&mut i2c).unwrap();
-                //println!("[DPS310] prs: {} hPa", dps310::comp_prs_val(rawprs, rawtmp, &dps_coef) / 100f32);
-                tx.send(SensorData::Dps310 {
-                    pressure: dps310::comp_prs_val(rawprs, rawtmp, &dps_coef) / 100f32,
-                    temperature: dps310::comp_temp_val(rawtmp, &dps_coef)
+    let i2c = Arc::clone(&i2c_handle);
+    let tx = sender.clone();
+    let h4 = std::thread::Builder::new().stack_size(4096).spawn(move || {
+
+        loop {
+            FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
+            let mut i2c = i2c.lock().unwrap();
+            FreeRtos::delay_ms(1);
+
+            // NOTE: Even restarting there wasn't help
+            //let mut i = 0usize;
+            //while !scd41::is_data_ready(&mut i2c).unwrap() {
+                //i += 1;
+                //FreeRtos::delay_ms(1);
+                //if i % 1000 == 0 {
+                    //log::warn!("Waiting for SCD41");
+                //}
+                //if i % 5000 == 0 && i > 0 {
+                    //log::warn!("Trying to restart SCD41");
+                    //scd41::setup(&mut i2c);
+                    //FreeRtos::delay_ms(5000);
+                    //continue;
+                //}
+            //}
+
+            if scd41::is_data_ready(&mut i2c).unwrap() {
+                let (co2, temp, hum) = scd41::perform_measurement(&mut i2c).unwrap();
+
+                tx.send(SensorData::Scd41 {
+                    co2,
+                    temperature: temp,
+                    humidity: hum
                 }).expect("failed to enqueue");
+            } else {
+                log::error!("failed to measure SCD41");
             }
-        });
-
-        let i2c = Arc::clone(&i2c_handle);
-        let tx = sender.clone();
-        let h2 = std::thread::Builder::new().stack_size(4096).spawn(move || {
-            loop {
-                FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
-                let mut i2c = i2c.lock().unwrap();
-                let rawlx = bh1750::perform_measurement(&mut i2c).unwrap();
-                //println!("[BH1750] lux: {:.2}", bh1750::calc_lux(rawlx));
-                tx.send(SensorData::Bh1750 {
-                    illumination: bh1750::calc_lux(rawlx)
-                }).expect("failed to enqueue");
-            }
-        });
-
-        let i2c = Arc::clone(&i2c_handle);
-        let tx = sender.clone();
-        let h3 = std::thread::Builder::new().stack_size(4096).spawn(move || {
-            loop {
-                FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
-                let mut i2c = i2c.lock().unwrap();
-                let (lx, inflx) = rpr0521rs::perform_measurement(&mut i2c).unwrap();
-                tx.send(SensorData::Rpr0521 {
-                    illumination: lx,
-                    infrared_illumination: inflx,
-                }).expect("failed to enqueue");
-            }
-        });
-
-        let i2c = Arc::clone(&i2c_handle);
-        let tx = sender.clone();
-        let h4 = std::thread::Builder::new().stack_size(4096).spawn(move || {
-            loop {
-                FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
-                let mut i2c = i2c.lock().unwrap();
-
-                while !scd41::is_data_ready(&mut i2c).unwrap() { FreeRtos::delay_ms(1) }
-
-                if scd41::is_data_ready(&mut i2c).unwrap() {
-                    let (co2, temp, hum) = scd41::read_measurement(&mut i2c).unwrap();
-
-                    tx.send(SensorData::Scd41 {
-                        co2,
-                        temperature: scd41::temp_comp(temp),
-                        humidity: scd41::humidity_comp(hum)
-                    }).expect("failed to enqueue");
-                } else {
-                    log::error!("failed to measure SCD41");
-                }
-            }
-        });
+        }
+    });
 
 
-        //let mqtt_client = Arc::clone(&mqtt_client);
-        let consumer = std::thread::Builder::new().stack_size(8192).spawn(move || {
-            while !wifi.is_connected().unwrap() {
-                let config = wifi.get_configuration().unwrap();
-                println!("Waiting for station {:?}", config);
-            }
+    let i2c = Arc::clone(&i2c_handle);
+    let tx = sender.clone();
+    let h = builder.spawn(move || {
+        let i2c = Arc::clone(&i2c);
+        loop {
+            FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
+            let mut i2c = i2c.lock().unwrap();
+
+            FreeRtos::delay_ms(1);
+            // DPS310
+            let rawtmp = dps310::read_temprature(&mut i2c).unwrap();
+            //println!("[DPS310] tmp: {:.2} °C, rawtmp: {}", dps310::comp_temp_val(rawtmp, &dps_coef), rawtmp);
+            //println!("[DPS310] tmp: {:.2} °C", dps310::comp_temp_val(rawtmp, &dps_coef));
+            FreeRtos::delay_ms(100);
+            let rawprs = dps310::read_pressure(&mut i2c).unwrap();
+            //println!("[DPS310] prs: {} hPa", dps310::comp_prs_val(rawprs, rawtmp, &dps_coef) / 100f32);
+            tx.send(SensorData::Dps310 {
+                pressure: dps310::comp_prs_val(rawprs, rawtmp, &dps_coef) / 100f32,
+                temperature: dps310::comp_temp_val(rawtmp, &dps_coef)
+            }).expect("failed to enqueue");
+        }
+    });
+
+    let i2c = Arc::clone(&i2c_handle);
+    let tx = sender.clone();
+    let h2 = std::thread::Builder::new().stack_size(4096).spawn(move || {
+        loop {
+            FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
+            let mut i2c = i2c.lock().unwrap();
+            FreeRtos::delay_ms(1);
+            let rawlx = bh1750::perform_measurement(&mut i2c).unwrap();
+            //println!("[BH1750] lux: {:.2}", bh1750::calc_lux(rawlx));
+            tx.send(SensorData::Bh1750 {
+                illumination: bh1750::calc_lux(rawlx)
+            }).expect("failed to enqueue");
+        }
+    });
+
+    let i2c = Arc::clone(&i2c_handle);
+    let tx = sender.clone();
+    let h3 = std::thread::Builder::new().stack_size(4096).spawn(move || {
+        loop {
+            FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
+            let mut i2c = i2c.lock().unwrap();
+            FreeRtos::delay_ms(1);
+            let (lx, inflx) = rpr0521rs::perform_measurement(&mut i2c).unwrap();
+            tx.send(SensorData::Rpr0521 {
+                illumination: lx,
+                infrared_illumination: inflx,
+            }).expect("failed to enqueue");
+        }
+    });
+
+    //let mqtt_client = Arc::clone(&mqtt_client);
+    let consumer = std::thread::Builder::new().stack_size(8192).spawn(move || {
+        while !wifi.is_connected().unwrap() {
+            let config = wifi.get_configuration().unwrap();
+            println!("Waiting for station {:?}", config);
+        }
+        loop {
+            FreeRtos::delay_ms(1);
             while let Ok(data) = receiver.recv() {
                 //let mut mqtt_client = mqtt_client.lock().unwrap();
+                log::info!("{:?}", data);
                 match data {
                     SensorData::Dps310 { pressure, temperature } => {
                         publish_data(&mut mqtt_client.0, "DPS310", "temperature", &format!("{:.2}", temperature));
@@ -180,7 +209,8 @@ fn main() -> Result<()> {
                     }
                 }
             }
-        });
+        }
+    });
     Ok(())
 }
 
@@ -198,7 +228,7 @@ fn print_csv(i2c: &mut I2cDriver, dps_coef: &Dps310Coefficients) {
     // DPS310_temp, DPS310_pres, BH1750_lx, RPR0521RS_lx, RPR0521RS_inf, SCD41_co2, SCD41_temp, SCD41_humidity
     println!("DPS310_temp,DPS310_pres,BH1750_lx,RPR0521RS_lx,RPR0521RS_inf,SCD41_co2,SCD41_temp,SCD41_humidity");
     loop {
-        FreeRtos::delay_ms(5000);
+        FreeRtos::delay_ms(DATA_COLLECTION_INTERVAL_MS);
 
         // DPS310
         let rawtmp = dps310::read_temprature(i2c).unwrap();

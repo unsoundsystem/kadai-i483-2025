@@ -25,6 +25,9 @@ pub fn stop_periodic_measurement(bus: &mut I2cDriver) -> Result<()> {
 pub fn is_data_ready(bus: &mut I2cDriver) -> Result<bool> {
     let mut res = [0u8; 3];
     bus.write_read(SCD41_ADDR, &[0xe4, 0xb8], &mut res, BLOCK)?;
+    if !check_crc(&res[..]) {
+        panic!("CRC check failed!");
+    }
     let word = ((res[0] as u16) << 8) | res[1] as u16;
     Ok(word & 0b111_1111_1111 != 0)
 }
