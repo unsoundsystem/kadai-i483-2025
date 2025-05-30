@@ -14,6 +14,8 @@ import org.apache.spark.SparkConf
 import org.apache.spark.streaming._
 import org.apache.spark.streaming.kafka010._
 import org.apache.kafka.clients.consumer.ConsumerRecord
+
+import org.apache.spark.streaming.dstream.DStream
 import org.apache.spark.streaming.kafka010.LocationStrategies.PreferConsistent
 import org.apache.spark.streaming.kafka010.ConsumerStrategies.Subscribe
 import org.apache.logging.log4j.Level
@@ -147,33 +149,17 @@ object App {
           ssc.sparkContext.parallelize(Seq(avg))
         }
       }
-    illumination_avg_stream.print()
-
-    import java.util.Properties
-    val props = new Properties()
-    props.put("bootstrap.servers", "150.65.230.59:9092")
-    props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-    props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-
-    illumination_avg_stream.foreachRDD { rdd =>
-      rdd.foreachPartition { partitionOfRecords =>
-        val producer = new KafkaProducer[String, String](props)
-        partitionOfRecords.foreach { record =>
-          val value = record.toString
-          val message = new ProducerRecord[String, String]("i483-sensors-s2510030-BH1750_avg-illumination", value)
-          producer.send(message)
-        }
-        producer.close()
-      }
-    }
-
+      publish_kafka[Double](illumination_avg_stream, "i483-sensors-s2510030-BH1750_avg-illumination")
 
     val co2_stream = KafkaUtils.createDirectStream[String, String](
       ssc,
       PreferConsistent,
-      Subscribe[String, String](Array("i483-sensors-s2510030-SCD41-co2"), kafkaParams)
+      Subscribe[String, String](
+        Array("i483-sensors-reference-SCD4x_0_0x62-CO2")
+        //Array("i483-sensors-s2510030-SCD41-co2")
+        , kafkaParams)
     )
-    val sf = StateSpec.function { (key: String, value: Option[Int], state: State[Option[Int]]) =>
+    val sf = StateSpec.function { (key: String, value: Option[Double], state: State[Option[Double]]) =>
           val prevOpt = state.getOption
           val current = value.get
           val is_crossed = prevOpt match {
@@ -186,35 +172,75 @@ object App {
           is_crossed
         }
     val co2_threshold_yes_no = co2_stream
-      .map(r => ("keeeeeeeeeeeeey", r.value().toInt))
+      .map(r => ("keeeeeeeeeeeeey", r.value().toDouble))
       .mapWithState(sf)
       .flatMap(_.toList)
 
 
-    co2_threshold_yes_no.foreachRDD { rdd =>
-      rdd.foreachPartition { partitionOfRecords =>
-        val producer = new KafkaProducer[String, String](props)
-        partitionOfRecords.foreach { record =>
-          val value = record.toString
-          val message = new ProducerRecord[String, String]("i483-sensors-s2510030-co2_threshold-crossed", value)
-          producer.send(message)
+    //co2_threshold_yes_no.print()
+    publish_kafka[String](co2_threshold_yes_no, "i483-sensors-s2510030-co2_threshold-crossed")
+    //co2_threshold_yes_no.foreachRDD { rdd =>
+      //rdd.foreachPartition { partitionOfRecords =>
+        //val producer = new KafkaProducer[String, String](props)
+        //partitionOfRecords.foreach { record =>
+          //val value = record.toString
+          //val message = new ProducerRecord[String, String]("i483-sensors-s2510030-co2_threshold-crossed", value)
+          //producer.send(message)
+        //}
+        //producer.close()
+      //}
+    //}
+
+
+    // kadai 3
+    val kadai3_topics = Array(
+        "i483-sensors-s2510030-BH1750-illumination",
+        "i483-sensors-s2510030-DPS310-air_pressure",
+        "i483-sensors-s2510030-DPS310-temperature",
+        "i483-sensors-s2510030-RPR0521-illumination",
+        "i483-sensors-s2510030-RPR0521-infrared_illumination",
+        "i483-sensors-s2510030-SCD41-co2",
+        "i483-sensors-s2510030-SCD41-humidity",
+        "i483-sensors-s2510030-SCD41-temperature"
+      );
+    val sensors_stream = KafkaUtils.createDirectStream[String, String](
+      ssc,
+      PreferConsistent,
+      Subscribe[String, String](kadai3_topics, kafkaParams)
+    )
+
+    kadai3_topics.foreach { topic =>
+      val out_topic_base =  "i483-sensors-s2510030-analytics" + topic.stripPrefix("i483-sensors-s2510030")
+      val batch = sensors_stream
+        .map(record => (record.topic, record.value().toDouble))
+        .filter(r => r(0) == topic)
+        .map(r => r(1))
+        .window(Minutes(5), Seconds(30))
+      // avg
+      val avg = batch
+        .transform { rdd =>
+          if (rdd.isEmpty()) {
+            ssc.sparkContext.emptyRDD[Double]
+          } else {
+            val sum = rdd.sum()
+            val count = rdd.count()
+            val avg = sum / count
+            ssc.sparkContext.parallelize(Seq(avg))
+          }
         }
-        producer.close()
-      }
+      //avg.print()
+      publish_kafka[Double](avg, out_topic_base + "-avg")
+      // max
+      val max = batch.reduce((x, y) => math.max(x, y))
+      //max.print()
+      publish_kafka[Double](max, out_topic_base + "-max")
+      // min
+      val min = batch.reduce((x, y) => math.min(x, y))
+      //min.print()
+      publish_kafka[Double](min, out_topic_base + "-min")
     }
 
 
-    //val sum = stream //.map(record => s"Kafka Data: $record")
-      //.map(r => (r.timestamp(), r.value()))
-      //.window(Minutes(5), Seconds(30))
-      //.reduceByKey(_ + _)
-
-    //val count = stream
-        //.map(r => (r.key(), r.value()))
-        //.countByWindow(Minutes(5), Seconds(30))
-    //val avg = count.cartesian(sum)
-      //.map(r => r(1)(1).toDouble / r(1)(0))
-    //avg.foreach(x => println(s"avg: $x"))
     ssc.start()
     ssc.awaitTermination()
   }
@@ -222,4 +248,24 @@ object App {
 
 case class AvgState(count: Double = 0, sum: Double = 0) {
   val avg = sum / scala.math.max(count, 1)
+}
+
+def publish_kafka[T](stream: DStream[T], topic: String): Unit = {
+    import java.util.Properties
+    val props = new Properties()
+    props.put("bootstrap.servers", "150.65.230.59:9092")
+    props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
+    props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
+
+    stream.foreachRDD { rdd =>
+      rdd.foreachPartition { partitionOfRecords =>
+        val producer = new KafkaProducer[String, String](props)
+        partitionOfRecords.foreach { record =>
+          val value = record.toString
+          val message = new ProducerRecord[String, String](topic, value)
+          producer.send(message)
+        }
+        producer.close()
+      }
+    }
 }

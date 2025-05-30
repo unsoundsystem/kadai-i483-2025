@@ -1,3 +1,4 @@
+#![feature(inherent_str_constructors)]
 mod bh1750;
 mod dps310;
 mod rpr0521rs;
@@ -9,7 +10,7 @@ use esp_idf_svc::{
   sys::link_patches,
   nvs::EspDefaultNvsPartition,
   eventloop::EspSystemEventLoop,
-  mqtt::client::{Details, EspMqttClient, MqttClientConfiguration, QoS},
+  mqtt::client::{Details, EspMqttClient, EspMqttEvent, MqttClientConfiguration, QoS},
 };
 use wifi::wifi;
 use crate::dps310::Dps310Coefficients;
@@ -51,6 +52,7 @@ fn main() -> Result<()> {
     let config = I2cConfig::new().baudrate(KiloHertz(100).into());
     let (sender, receiver) = channel::<SensorData>();
     let mut i2c = I2cDriver::new(i2c, sda, scl, &config)?;
+    let mut led = PinDriver::output(peripherals.pins.gpio2)?;
 
     // WiFi setup
     let wifi = wifi(
@@ -64,7 +66,20 @@ fn main() -> Result<()> {
     // server url: 150.65.230.59
     let mqtt_config = MqttClientConfiguration::default();
     let broker_url = "mqtt://150.65.230.59";
-    let mut mqtt_client = EspMqttClient::new(broker_url, &mqtt_config).unwrap();
+    let mut mqtt_client = EspMqttClient::new_cb(broker_url, &mqtt_config,
+        move |e| match e.payload() {
+            esp_idf_svc::mqtt::client::EventPayload::Received { data, .. } =>
+            {
+                let s = str::from_utf8(data).expect("failed to read string from topic");
+                if s == "yes" {
+                    led.set_high().unwrap();
+                } else if s == "no" {
+                    led.set_high().unwrap();
+                }
+            }
+            _ => {}
+        }
+        ).unwrap();
 
 
     log::info!("Setting up sensors");
@@ -185,6 +200,7 @@ fn main() -> Result<()> {
             let config = wifi.get_configuration().unwrap();
             println!("Waiting for station {:?}", config);
         }
+        mqtt_client.subscribe("i483/sensors/s2510030/co2_threshold/crossed", QoS::AtLeastOnce).unwrap();
         loop {
             FreeRtos::delay_ms(1);
             while let Ok(data) = receiver.recv() {
@@ -192,20 +208,20 @@ fn main() -> Result<()> {
                 log::info!("{:?}", data);
                 match data {
                     SensorData::Dps310 { pressure, temperature } => {
-                        publish_data(&mut mqtt_client.0, "DPS310", "temperature", &format!("{:.2}", temperature));
-                        publish_data(&mut mqtt_client.0, "DPS310", "air_pressure", &format!("{:.2}", pressure));
+                        publish_data(&mut mqtt_client, "DPS310", "temperature", &format!("{:.2}", temperature));
+                        publish_data(&mut mqtt_client, "DPS310", "air_pressure", &format!("{:.2}", pressure));
                     }
                     SensorData::Scd41 { co2, temperature, humidity } => {
-                        publish_data(&mut mqtt_client.0, "SCD41", "temperature", &format!("{:.2}", temperature));
-                        publish_data(&mut mqtt_client.0, "SCD41", "humidity", &format!("{:.2}", humidity));
-                        publish_data(&mut mqtt_client.0, "SCD41", "co2", &format!("{co2}"));
+                        publish_data(&mut mqtt_client, "SCD41", "temperature", &format!("{:.2}", temperature));
+                        publish_data(&mut mqtt_client, "SCD41", "humidity", &format!("{:.2}", humidity));
+                        publish_data(&mut mqtt_client, "SCD41", "co2", &format!("{co2}"));
                     }
                     SensorData::Rpr0521 { illumination, infrared_illumination } => {
-                        publish_data(&mut mqtt_client.0, "RPR0521", "illumination", &format!("{illumination}"));
-                        publish_data(&mut mqtt_client.0, "RPR0521", "infrared_illumination", &format!("{infrared_illumination}"));
+                        publish_data(&mut mqtt_client, "RPR0521", "illumination", &format!("{illumination}"));
+                        publish_data(&mut mqtt_client, "RPR0521", "infrared_illumination", &format!("{infrared_illumination}"));
                     }
                     SensorData::Bh1750 { illumination } => {
-                        publish_data(&mut mqtt_client.0, "BH1750", "illumination", &format!("{illumination}"));
+                        publish_data(&mut mqtt_client, "BH1750", "illumination", &format!("{illumination}"));
                     }
                 }
             }
