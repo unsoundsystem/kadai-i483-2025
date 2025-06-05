@@ -15,7 +15,7 @@ lazy val root = project
       ("org.apache.spark" % "spark-streaming" % "3.5.5" % "provided").cross(CrossVersion.for3Use2_13),
       ("org.apache.spark" % "spark-core" % "3.5.5" % "provided").cross(CrossVersion.for3Use2_13),
       ("org.apache.spark" %% "spark-streaming-kafka-0-10" % "3.5.5" % "provided").cross(CrossVersion.for3Use2_13),
-      "org.apache.bahir" %% "spark-sql-streaming-mqtt" % "2.4.0-SNAPSHOT"
+      //"org.apache.bahir" %% "spark-sql-streaming-mqtt" % "2.4.0-SNAPSHOT"
     ),
     Compile / run := Defaults.runTask(
       Compile / fullClasspath,
