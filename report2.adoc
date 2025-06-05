@@ -5,6 +5,7 @@
 * ESP32上のプログラムにRust/esp-idf-svcを採用
 * ストリーム処理にSparkとScalaを採用 
     ** SparkではDStreamで，構造化ストリーミングは利用しない
+* 課題2のMQTTクライアントに rumqttc を採用(https://docs.rs/rumqttc/latest/rumqttc/)
 
 == データサンプル
 
